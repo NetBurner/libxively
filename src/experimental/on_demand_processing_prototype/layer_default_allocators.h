@@ -19,7 +19,7 @@
  * \param   type simple pointer to type structure
  * \return  pointer to allocated layer_t structure
  */
-static inline layer_t* default_layer_heap_alloc( const layer_type_t* type )
+static inline layer_t* default_layer_heap_alloc( const layer_type_t* type, const char layer_variant )
 {
     layer_t* ret = ( layer_t* ) xi_alloc( sizeof( layer_t ) );
 
@@ -27,7 +27,7 @@ static inline layer_t* default_layer_heap_alloc( const layer_type_t* type )
 
     memset( ret, 0, sizeof( layer_t ) );
 
-    ret->layer_functions                = &type->layer_interface;
+    ret->layer_functions                = &type->layer_interface[ layer_variant ];
     ret->layer_type_id                  = type->layer_type_id;
     ret->layer_connection.self          = ret;
 

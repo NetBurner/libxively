@@ -19,10 +19,40 @@ enum LAYERS_ID
     , DUMMY_LAYER_TYPE_1
 };
 
+enum IO_LAYER_VARIANTS
+{
+    LV_IO_DEFAULT = 0
+};
+
+enum DUMMY_LAYER_VARIANTS
+{
+     LV_DUMMY_V1 = 0
+   , LV_DUMMY_V2
+};
+
+
+enum HTTP_LAYER_VARIANTS
+{
+     LV_HTTP_CREATE_DATAPOINT = 0
+   , LV_HTTP_GET_DATAPOINT
+};
+
 layer_state_t dummy_layer1_on_demand( layer_connectivity_t* context, void* data, const char impulse )
 {
     ( void ) impulse;
     ( void ) data;
+
+    printf( "dummy_layer1_on_demand %p\n", context->self->user_data );
+
+    return CALL_ON_PREV_ON_DEMAND( context->self, data, 0 );
+}
+
+layer_state_t dummy_layer1_on_demand2( layer_connectivity_t* context, void* data, const char impulse )
+{
+    ( void ) impulse;
+    ( void ) data;
+
+    printf( "dummy_layer1_on_demand2 %p\n", context->self->user_data );
 
     return CALL_ON_PREV_ON_DEMAND( context->self, data, 0 );
 }
@@ -34,6 +64,7 @@ layer_state_t dummy_layer1_on_data_ready( layer_connectivity_t* context, const v
 
     return CALL_ON_PREV_ON_DATA_READY( context->self, data, 0 );
 }
+
 
 layer_state_t dummy_layer1_close( layer_connectivity_t* context )
 {
@@ -55,10 +86,14 @@ DEFINE_CONNECTION_SCHEME( CONNECTION_SCHEME_1, CONNECTION_SCHEME_1_DATA );
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 BEGIN_LAYER_TYPES_CONF()
-      LAYER_TYPE( IO_LAYER, &posix_io_layer_on_demand, &posix_io_layer_on_data_ready
-                          , &posix_io_layer_close, &posix_io_layer_on_close )
-    , LAYER_TYPE( DUMMY_LAYER_TYPE_1, &dummy_layer1_on_demand, &dummy_layer1_on_data_ready
-                                    , &dummy_layer1_close, &dummy_layer1_on_close )
+    LAYER_TYPE_BEGIN( IO_LAYER )
+          LAYER_VARIANT( &posix_io_layer_on_demand, &posix_io_layer_on_data_ready, &posix_io_layer_close, &posix_io_layer_on_close )
+        , LAYER_VARIANT( &posix_io_layer_on_demand, &posix_io_layer_on_data_ready, &posix_io_layer_close, &posix_io_layer_on_close )
+    LAYER_TYPE_END()
+,   LAYER_TYPE_BEGIN( DUMMY_LAYER_TYPE_1 )
+          LAYER_VARIANT( &dummy_layer1_on_demand, &dummy_layer1_on_data_ready, &dummy_layer1_close, &dummy_layer1_on_close )
+        , LAYER_VARIANT( &dummy_layer1_on_demand2, &dummy_layer1_on_data_ready, &dummy_layer1_close, &dummy_layer1_on_close )
+    LAYER_TYPE_END()
 END_LAYER_TYPES_CONF()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,8 +116,9 @@ int main( int argc, const char* argv[] )
     ( void ) argv;
 
     void* user_datas[] = { 0, 0 };
+    char layer_variants[] = { LV_IO_DEFAULT, LV_DUMMY_V1 };
 
-    layer_chain_t layer_chain = create_and_connect_layers( CONNECTION_SCHEME_1, user_datas, CONNECTION_SCHEME_LENGTH( CONNECTION_SCHEME_1 ) );
+    layer_chain_t layer_chain = create_and_connect_layers( CONNECTION_SCHEME_1, layer_variants, user_datas, CONNECTION_SCHEME_LENGTH( CONNECTION_SCHEME_1 ) );
 
     layer_t* io_layer = connect_to_endpoint( layer_chain.bottom, XI_HOST, XI_PORT );
     layer_t* dummy_layer = layer_chain.top;

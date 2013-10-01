@@ -25,7 +25,7 @@ typedef struct
     layer_t* ( *placement_delete ) ( layer_t* layer );
 
     /** \brief strict layer allocation, may implement different strategies for allocation of the memory required for layer */
-    layer_t* ( *alloc )            ( const layer_type_t* type );
+    layer_t* ( *alloc )            ( const layer_type_t* type, const char layer_variant );
 
     /** \brief strict deallocation of layer's memory */
     void ( *free )                 ( layer_type_t* type

@@ -92,7 +92,7 @@ void test_layer_initialization(void* data)
 
     LAYER_LOCAL_INSTANCE(
                   dummy_layer1_instance
-                , &DLT1.layer_interface
+                , &DLT1.layer_interface[ 0 ]
                 , DLT1.layer_type_id
                 , &user_data );
 

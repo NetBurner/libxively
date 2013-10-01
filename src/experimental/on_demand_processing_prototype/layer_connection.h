@@ -74,13 +74,17 @@ static inline layer_chain_t connect_layers( layer_t* layers[], const size_t leng
  * \param user_datas
  * \return
  */
-static inline layer_chain_t create_and_connect_layers( const layer_type_id_t layers_ids[], void* user_datas[], const size_t length )
+static inline layer_chain_t create_and_connect_layers(
+          const layer_type_id_t layers_ids[]
+        , const char layer_variants[]
+        , void* user_datas[]
+        , const size_t length )
 {
     layer_t* layers[ length ];
 
     for( size_t i = 0; i < length; ++i )
     {
-        layers[ i ] = alloc_create_layer( layers_ids[ i ], user_datas[ i ] );
+        layers[ i ] = alloc_create_layer( layers_ids[ i ], layer_variants[ i ], user_datas[ i ] );
     }
 
     return connect_layers( layers, length );

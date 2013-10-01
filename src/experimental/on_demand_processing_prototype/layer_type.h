@@ -19,13 +19,13 @@ typedef int layer_type_id_t;
  */
 typedef struct
 {
-    layer_type_id_t     layer_type_id;
-    layer_interface_t   layer_interface;
+    layer_type_id_t         layer_type_id;
+    layer_interface_t*      layer_interface;
 } layer_type_t;
 
 
 #define LAYER_LOCAL_TYPE( type_name, layer_type_id, on_demand, on_read, on_close, close )\
-    static layer_type_t type_name = { layer_type_id, { on_demand, on_read, on_close, close } }
+    static layer_type_t type_name = { layer_type_id, { { on_demand, on_read, on_close, close } } }
 
 
 #endif

@@ -20,10 +20,10 @@ extern const layer_type_t LAYER_TYPES[];
  * \param   layer_type
  * \return  pointer to the newly allocated layer instance
  */
-static inline layer_t* alloc_layer( const layer_type_id_t layer_type_id )
+static inline layer_t* alloc_layer( const layer_type_id_t layer_type_id, const char layer_variant )
 {
     const layer_type_t* layer_type = &LAYER_TYPES[ layer_type_id ];
-    return FACTORY_ENTRIES[ layer_type_id ].alloc( layer_type );
+    return FACTORY_ENTRIES[ layer_type_id ].alloc( layer_type, layer_variant );
 }
 
 /**
@@ -41,9 +41,9 @@ static inline layer_t* create_layer( layer_t* layer, void* user_data )
 }
 
 
-static inline layer_t* alloc_create_layer( const layer_type_id_t layer_type_id, void* user_data )
+static inline layer_t* alloc_create_layer( const layer_type_id_t layer_type_id, const char layer_variant, void* user_data )
 {
-    layer_t* ret = alloc_layer( layer_type_id );
+    layer_t* ret = alloc_layer( layer_type_id, layer_variant );
 
     XI_CHECK_MEMORY( ret );
 
