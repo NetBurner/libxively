@@ -6,6 +6,155 @@
 #include "xi_macros.h"
 #include "xi_debug.h"
 #include "common.h"
+#include "xi_stated_sscanf_state.h"
+
+
+/**
+ * @brief xi_stated_sscanf
+ * @param state
+ * @param pattern
+ * @return -1 if pattern wasn't match, 0 if more data needed, 1 if pattern has been matched and there is still data in the source
+ */
+short xi_stated_sscanf(
+          xi_stated_sscanf_state_t* s
+        , const const_data_descriptor_t* pattern
+        , const const_data_descriptor_t* source
+        , void** variables )
+{
+    BEGIN_CORO( s->state )
+
+    s->vi = 0;
+    s->p  = 0;
+
+    for( ; s->p < pattern->hint_size - 1; )
+    {
+        if( pattern->data_ptr[ s->p ] != '%' ) // check on the raw pattern basis one to one
+        {
+            if( pattern->data_ptr[ s->p ] != source->data_ptr[ s->i ] )
+            {
+                return -1;
+            }
+            else
+            {
+                s->i++;
+                s->p++;
+
+                if( s->i == source->hint_size )
+                {
+                    YIELD( s->state, 0 )
+                    s->i = 0;
+                    continue;
+                }
+            }
+        }
+        else // parsing state
+        {
+            // simplified version so don't expect to parse %%
+            s->p++; // let's move the marker to the type
+
+            // @TODO think of this implementation and take into concideration
+            // an idea of putting more of each case implementation into the common function
+            // that would than be reused and make the code smaller
+            if( pattern->data_ptr[ s->p ] == 'd' )
+            {
+                s->buff_len = 0;
+
+                while( source->data_ptr[ s->i ] >= 48 && source->data_ptr[ s->i ] <= 57 )
+                {
+                    s->buffer[ s->buff_len++ ] = source->data_ptr[ s->i++ ];
+
+                    if( s->i == source->hint_size )
+                    {
+                        YIELD( s->state, 0 )
+                        s->i = 0;
+                    }
+                }
+
+                short base      = 10;
+                int*  value     = ( int* ) variables[ s->vi ];
+                *value          = ( s->buffer[ s->buff_len - 1 ] - 48 );
+
+                for( unsigned char j = 1; j < s->buff_len; ++j, base *= 10 )
+                { *value += base * ( s->buffer[ s->buff_len - j - 1 ] - 48 ); }
+
+                s->p++;     // move on, finished with parsing
+                s->vi++;    // switch to the next variable
+            }
+            else if( pattern->data_ptr[ s->p ] == 's' )
+            {
+                s->tmp_i = 0;
+
+                char* svalue = ( char* ) variables[ s->vi ];
+
+                while( ( source->data_ptr[ s->i ] >= 65 && source->data_ptr[ s->i ] <= 122 ) || source->data_ptr[ s->i ] == 45 )
+                {
+                    svalue[ s->tmp_i++ ] = source->data_ptr[ s->i++ ];
+
+                    if( s->i == source->hint_size )
+                    {
+                        YIELD( s->state, 0 )
+                        s->i = 0;
+                    }
+                }
+
+                svalue[ s->tmp_i ] = '\0'; // put guard
+
+                s->p++;     // move on, finished with parsing
+                s->vi++;    // switch to the next variable
+            }
+            else if( pattern->data_ptr[ s->p ] == '.' )
+            {
+                s->tmp_i = 0;
+
+                char* svalue = ( char* ) variables[ s->vi ];
+
+                while( source->data_ptr[ s->i ] >= 32 && source->data_ptr[ s->i ] <= 122 )
+                {
+                    svalue[ s->tmp_i++ ] = source->data_ptr[ s->i++ ];
+
+                    if( s->i == source->hint_size )
+                    {
+                        YIELD( s->state, 0 )
+                        s->i = 0;
+                    }
+                }
+
+                svalue[ s->tmp_i ] = '\0'; // put guard
+
+                s->p++;     // move on, finished with parsing
+                s->vi++;    // switch to the next variable
+            }
+            else if( pattern->data_ptr[ s->p ] == 'B' )
+            {
+                s->tmp_i = 0;
+
+                char* svalue = ( char* ) variables[ s->vi ];
+
+                while( source->data_ptr[ s->i ] >= 0 && source->data_ptr[ s->i ] <= 127 )
+                {
+                    svalue[ s->tmp_i++ ] = source->data_ptr[ s->i++ ];
+
+                    if( s->i == source->hint_size )
+                    {
+                        YIELD( s->state, 0 )
+                        s->i = 0;
+                    }
+                }
+
+                svalue[ s->tmp_i ] = '\0'; // put guard
+
+                s->p++;     // move on, finished with parsing
+                s->vi++;    // switch to the next variable
+            }
+        }
+    }
+
+    RESTART( s->state, 1 )
+
+    END_CORO()
+
+    return 1;
+}
 
 
 /**
@@ -93,9 +242,12 @@ static inline layer_state_t http_layer_on_data_ready_http_parse(
       , const void* data
       , const layer_hint_t hint )
 {
+    XI_UNUSED( hint );
+    XI_UNUSED( context );
+
     // expecting data buffer so unpack it
     const const_data_descriptor_t* data_description = ( const const_data_descriptor_t* ) data;
-    http_layer_data_t* http_data                    = ( http_layer_data_t* ) context->self->user_data;
+    // http_layer_data_t* http_data                    = ( http_layer_data_t* ) context->self->user_data;
 
     for( int i = 0; i < data_description->hint_size; ++i )
     {
@@ -106,155 +258,6 @@ static inline layer_state_t http_layer_on_data_ready_http_parse(
     return LAYER_STATE_MORE_DATA;
 }
 
-
-/**
- * \brief  see the layer_interface for details
- */
-static inline layer_state_t http_line_layer_on_data_ready(
-      layer_connectivity_t* context
-    , const void* data
-    , const layer_hint_t hint )
-{
-    XI_UNUSED( context );
-    XI_UNUSED( data );
-    XI_UNUSED( hint );
-
-    // expecting data buffer so unpack it
-    const const_data_descriptor_t* data_description = ( const const_data_descriptor_t* ) data;
-    http_layer_data_t* http_data                    = ( http_layer_data_t* ) context->self->user_data;
-
-    // temporary variables
-    char current_offset = 0;
-
-    // check if the tmp buffer contains any partial line
-    if( http_data->last_char_marker )
-    {
-        // check if the last sign was \r if that is so we are expecting the \n to be the first in line
-        // if not we assume that we are looking for the sequence normally
-        if( http_data->line_buffer[ http_data->last_char_marker - 1 ] == '\r' )
-        {
-            if( data_description->data_ptr[ 0 ] == '\n' )
-            {
-                // move the current offset to the proper position
-                current_offset = 1;
-
-                // call the next layer on data ready with proper values
-                const const_data_descriptor_t tmp_data_description = { http_data->line_buffer, http_data->last_char_marker - 1, http_data->last_char_marker - 1 };
-
-                if( tmp_data_description.hint_size == 0 )
-                {
-                    printf ( "\ndouble crlf\n" );
-                }
-
-                layer_state_t tmp_layer_state = http_layer_on_data_ready_http_parse( &context->self->layer_connection, ( void* ) &tmp_data_description, LAYER_HINT_NONE );
-
-                http_data->last_char_marker = 0;
-
-                if( tmp_layer_state == LAYER_STATE_OK ) // the end of parsing may have happend here
-                {
-                    return LAYER_STATE_OK;
-                }
-
-                // else let's continue
-            }
-        }
-        else
-        {
-            // get the last eol
-            char* eol = strstr( data_description->data_ptr, XI_HTTP_CRLF );
-
-            if( eol )
-            {
-                memcpy( http_data->line_buffer + http_data->last_char_marker, data_description->data_ptr, eol - data_description->data_ptr );
-
-                http_data->last_char_marker += eol - data_description->data_ptr;
-                http_data->line_buffer[ http_data->last_char_marker ] = '\0';
-
-                const const_data_descriptor_t tmp_data_description = { http_data->line_buffer, http_data->last_char_marker, http_data->last_char_marker };
-
-                if( tmp_data_description.hint_size == 0 )
-                {
-                    printf ( "\ndouble crlf\n" );
-                }
-
-                layer_state_t tmp_layer_state = http_layer_on_data_ready_http_parse( &context->self->layer_connection, ( void* ) &tmp_data_description, LAYER_HINT_NONE );
-
-                if( tmp_layer_state == LAYER_STATE_OK ) // the end of parsing may have happend here
-                {
-                    return LAYER_STATE_OK;
-                } // else let's continue
-
-                eol += strlen( XI_HTTP_CRLF );
-                current_offset = eol - data_description->data_ptr;
-                http_data->last_char_marker = 0;
-            }
-            else
-            {
-                // most probably we are in trouble here
-                printf( "\nProblem!!!!\n" );
-                printf( "\n[%s] [size:%d]\n", data_description->data_ptr, data_description->hint_size );
-                return LAYER_STATE_ERROR;
-            }
-        }
-    }
-
-    // endless loop for normal case that looks for the \r\n token
-    for( ; ; )
-    {
-        // get the last eol
-        char* eol = strstr( data_description->data_ptr + current_offset, XI_HTTP_CRLF );
-
-        if( eol ) //
-        {
-
-            // call the next layer on data ready with proper values
-            const const_data_descriptor_t tmp_data_description = { data_description->data_ptr + current_offset, data_description->data_size - current_offset, eol - ( data_description->data_ptr + current_offset ) };
-
-            if( tmp_data_description.hint_size == 0 )
-            {
-                printf ( "\ndouble crlf\n" );
-            }
-
-            layer_state_t tmp_layer_state = http_layer_on_data_ready_http_parse( &context->self->layer_connection, ( void* ) &tmp_data_description, LAYER_HINT_NONE );
-
-            if( tmp_layer_state == LAYER_STATE_OK ) // the end of parsing may have happend here
-            {
-                return LAYER_STATE_OK;
-            } // else let's continue
-
-            // don't forget to update the offset
-            eol += strlen( XI_HTTP_CRLF );
-            current_offset = eol - data_description->data_ptr;
-
-            if( current_offset == data_description->data_size )
-            {
-                // we are at the end of the size and the CLRF has been read
-                return LAYER_STATE_MORE_DATA;
-            }
-        }
-        else
-        {
-            // copy the unparsed part of the buffer
-            memcpy( http_data->line_buffer, data_description->data_ptr + current_offset, data_description->hint_size - current_offset );
-
-            // set up the proper marker position
-            http_data->last_char_marker = data_description->hint_size - current_offset;
-
-            // @TODO add proper error handling
-            if( current_offset > data_description->hint_size )
-            {
-                printf( "\noffset too big!\n" );
-            }
-
-            // set up the guard in order to prevent strstr from overflow
-            http_data->line_buffer[ http_data->last_char_marker ] = '\0';
-
-            break;
-        }
-    }
-
-    return LAYER_STATE_MORE_DATA;
-}
 
 
 /**
@@ -287,6 +290,7 @@ layer_state_t http_layer_data_ready(
 }
 
 
+
 /**
  * \brief  see the layer_interface for details
  */
@@ -295,23 +299,181 @@ layer_state_t http_layer_on_data_ready(
     , const void* data
     , const layer_hint_t hint )
 {
-    XI_UNUSED( context );
-    XI_UNUSED( data );
+
     XI_UNUSED( hint );
 
-
-    // expecting data buffer so unpack it
+    // unpack http_layer_data so unpack it
     http_layer_data_t* http_layer_data = ( http_layer_data_t* ) context->self->user_data;
 
-    switch( http_layer_data->parser_state )
+    // some tmp variables
+    int  value            = 0;
+    short sscanf_state    = 0;
+    char svalue[ 64 ];
+    char header_name[ 32 ];
+
+    xi_stated_sscanf_state_t* xi_stated_state = &http_layer_data->xi_stated_sscanf_state;
+
+    BEGIN_CORO( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ] )
+
+    memset( xi_stated_state, 0, sizeof( xi_stated_sscanf_state_t ) );
+
+    // STAGE 01 find the http status
     {
-        case 0:
-            return http_line_layer_on_data_ready( &context->self->layer_connection, data, hint );
-        case 1:
-            return http_layer_on_data_ready_http_parse( &context->self->layer_connection, data, hint );
+        //
+        {
+            char status_pattern[]       = "HTTP/1.1 %d %s\r\n";
+            const_data_descriptor_t v   = { status_pattern, sizeof( status_pattern ), sizeof( status_pattern ) };
+            void*                  pv[] = { ( void* ) &value, ( void* ) &svalue };
+            sscanf_state                = 0;
+
+            while( sscanf_state == 0 )
+            {
+                sscanf_state = xi_stated_sscanf(
+                              xi_stated_state
+                            , &v
+                            , ( const_data_descriptor_t* ) data
+                            , pv );
+
+                if( sscanf_state == 0 )
+                {
+                    YIELD( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_MORE_DATA )
+                    continue;
+                }
+            }
+
+            if( sscanf_state == -1 )
+            {
+                EXIT( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_ERROR )
+            }
+        }
     }
 
-    return LAYER_STATE_MORE_DATA;
+
+    // reset
+
+    // STAGE 02 reading headers
+    {
+        char status_pattern[]       = "%s: %.\r\n";
+        const_data_descriptor_t v   = { status_pattern, sizeof( status_pattern ), sizeof( status_pattern ) };
+        void*                  pv[] = { ( void* ) &header_name, ( void* ) &svalue };
+
+        do
+        {
+            sscanf_state            = 0;
+
+            while( sscanf_state == 0 )
+            {
+                sscanf_state = xi_stated_sscanf(
+                              xi_stated_state
+                            , &v
+                            , ( const_data_descriptor_t* ) data
+                            , pv );
+
+                if( sscanf_state == 0 )
+                {
+                    YIELD( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_MORE_DATA )
+                    continue;
+                }
+            }
+
+            if( sscanf_state == 1 )
+            {
+                xi_debug_printf( "%s: %s\n", header_name, svalue );
+
+                if( memcmp( header_name, "Content-Length", sizeof( "Content-Length" ) ) == 0 )
+                {
+                    xi_stated_sscanf_state_t tmp_state;
+                    memset( &tmp_state, 0, sizeof( xi_stated_sscanf_state_t ) );
+
+                    char tmp_status_pattern[]           = "%d";
+                    const_data_descriptor_t tmp_v       = { tmp_status_pattern, sizeof( tmp_status_pattern ), sizeof( tmp_status_pattern ) };
+                    const_data_descriptor_t tmp_data    = { svalue, sizeof( svalue ), sizeof( svalue ) };
+                    void*                   tmp_pv[]    = { ( void* ) &http_layer_data->content_length };
+
+                    sscanf_state = xi_stated_sscanf( &tmp_state, &tmp_v, &tmp_data, tmp_pv );
+
+                    if( sscanf_state == -1 )
+                    {
+                        EXIT( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_ERROR )
+                    }
+                }
+            }
+
+        } while( sscanf_state == 1 );
+    }
+
+    // STAGE 03 reading second \r\n that means that the payload should begin just right after
+    {
+        char status_pattern[]       = "\r\n";
+        const_data_descriptor_t v   = { status_pattern, sizeof( status_pattern ), sizeof( status_pattern ) };
+
+        sscanf_state                = 0;
+
+        while( sscanf_state == 0 )
+        {
+            sscanf_state = xi_stated_sscanf(
+                          xi_stated_state
+                        , &v
+                        , ( const_data_descriptor_t* ) data
+                        , 0 );
+
+            if( sscanf_state == 0 )
+            {
+                YIELD( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_MORE_DATA )
+                continue;
+            }
+        }
+    }
+
+    // STAGE 04 reading payload
+    {
+        // clear the buffer
+        memset( svalue, 0, sizeof( svalue ) );
+        xi_debug_printf( "\n" );
+
+        char status_pattern[]       = "%B";
+        const_data_descriptor_t v   = { status_pattern, sizeof( status_pattern ), sizeof( status_pattern ) };
+        void*                  pv[] = { ( void* ) &svalue };
+
+        http_layer_data->counter    = 0;
+        sscanf_state                = 0;
+
+        while( sscanf_state == 0 )
+        {
+            short before = xi_stated_state->i;
+
+            sscanf_state = xi_stated_sscanf(
+                          xi_stated_state
+                        , &v
+                        , ( const_data_descriptor_t* ) data
+                        , pv );
+
+            short after = xi_stated_state->i;
+
+            http_layer_data->counter += ( after - before );
+
+            if( http_layer_data->content_length == http_layer_data->counter )
+            {
+                xi_debug_printf( "%s\n", svalue );
+                EXIT( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_OK )
+            }
+
+            if( sscanf_state == 0 )
+            {
+                YIELD( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_MORE_DATA )
+                xi_stated_state->tmp_i  = 0; // reset the value pointer
+                xi_stated_state->i      = 0; // reset the source pointer
+                xi_debug_printf( "%s", svalue );
+                memset( svalue, 0, sizeof( svalue ) );
+            }
+        }
+    }
+
+    EXIT( context->self->layer_states[ FUNCTION_ID_ON_DATA_READY ], LAYER_STATE_OK )
+
+    END_CORO()
+
+    return LAYER_STATE_ERROR;
 }
 
 
