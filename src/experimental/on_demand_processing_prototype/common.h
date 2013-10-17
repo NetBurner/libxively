@@ -2,7 +2,7 @@
 #define __COMMON_H__
 
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 /**
  * \brief the structure that describes the buffer for storing/passing
