@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "xi_consts.h"
+#include "xi_config.h"
 
 #include "common.h"
 #include "layer_api.h"
